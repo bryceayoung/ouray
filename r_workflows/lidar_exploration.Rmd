@@ -1,0 +1,73 @@
+---
+title: "las_exploration"
+author: "Bryce A Young"
+date: "2024-09-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Overview
+
+This document simply explores the contents of the las files that I downloaded for Ouray County, CO. 
+
+```{r}
+
+# packages <- c('lidR', 'terra', 'sf', 'raster')
+
+# install.packages(packages)
+
+library(lidR)
+library(terra)
+library(sf)
+library(raster)
+
+```
+
+Seems like there were some errors installing packages. Classic R. I'm going to ignore it and hope it doesn't affect me.
+
+Let's import an example las tile. 
+
+```{r}
+las_path <- "F:/_BRYCE/LiDAR/Ouray_County/las_catalog/usgs_lpc_co_sanluisjuanmiguel_2020_d20_13s_bc_4821.las"
+
+las <- readLAS(las_path, filter = '-drop_withheld')
+
+las_check(las)
+print(las)
+```
+
+The point cloud is not normalized. There seem to be some errors in the data too. 
+
+```{r}
+
+plot(las, color = 'Classification')
+
+```
+
+Let's create a density raster at 1m resolution so that we can drag it into GIS and examine for areas of higher or lower density.
+
+```{r}
+cell_size <-1
+density_raster <- grid_density(las, res = cell_size)
+```
+
+```{r}
+plot(density_raster)
+```
+
+```{r}
+
+writeRaster(density_raster, "F:/_BRYCE/LiDAR/Ouray_County/density_rasters/test.tif")
+
+```
+
+Based on some ArcGIS analysis of the density raster, I'm going to be able to make canopy height models at 1m resolution. So the next step for me is to create a LAS Catalog. Once the catalog is created, I'm going to create lax files for each las file. These are reference files that speed up read time when working with las tiles. 
+
+```{r}
+
+
+
+```

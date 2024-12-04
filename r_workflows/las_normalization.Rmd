@@ -1,0 +1,160 @@
+---
+title: "las_catalog"
+author: "Bryce A Young"
+date: "2024-09-25"
+output: html_document
+---
+
+**Overview**: In this document, I create a LAS catalog and lax files associated with each las tile. The lax files index adjacent tiles in a way that makes reading tiles much faster for light workflows. More can be read at this link: https://cran.r-project.org/web/packages/lidR/vignettes/lidR-computation-speed-LAScatalog.html
+
+```{r}
+
+library(sf)
+library(sp)
+library(lidR)
+library(terra)
+library(raster)
+library(future)
+
+```
+
+Create a las catalog
+
+
+
+```{r}
+
+ctg <- readLAScatalog("F:/_BRYCE/LiDAR/Ouray_County/las_catalog/", filter = '-drop_withheld -drop_class 18')
+ctg
+
+```
+
+Printing out `ctg` allows us to view high level information about the area. For instance, there are 1394 tiles, and about 7.8 pts / m2 across the entire catalog. Let's plot the catalog and see what the extent looks like. 
+
+```{r}
+
+plot(ctg)
+
+```
+Now that we have a clean catalog, we're going to normalize height. First let's make sure the ground points are classified. 
+
+```{r}
+
+las <- readLAS("F:/_BRYCE/LiDAR/Ouray_County/las_catalog/usgs_lpc_co_sanluisjuanmiguel_2020_d20_13s_bc_6423.las")
+
+classification_counts <- table(las@data$Classification)
+classification_counts
+
+```
+The ground points are classified. We can go ahead and normalize the height. 
+
+First, I read in the catalog again because it now includes lax files which will speed things up a lot. Now, I am going to do a test normalization.
+
+```{r}
+# Output directory
+output_dir <- "F:/_BRYCE/LiDAR/Ouray_County/las_normalized_catalog/"
+
+# Read las file
+las <- readLAS("F:/_BRYCE/LiDAR/Ouray_County/las_catalog/usgs_lpc_co_sanluisjuanmiguel_2020_d20_13s_bc_6423.las")
+
+# normalize las file
+nlas <- normalize_height(las, knnidw())
+
+# Output to file path
+output_file <- file.path(output_dir, "test_normalized.las")
+writeLAS(nlas, output_file)
+
+
+```
+Now let's plot it to see what it looks like.
+
+```{r}
+nlas <- readLAS('F:/_BRYCE/LiDAR/Ouray_County/las_normalized_catalog/usgs_lpc_co_sanluisjuanmiguel_2020_d20_13s_bc_3836_normalized.las')
+plot(nlas)
+
+```
+
+That looks good, so let's just run the whole catalog. First let's create lax files for each las file to speed up processing.
+```{r}
+
+lidR:::catalog_laxindex(ctg)
+
+```
+
+Now let's normalize. This will take some time. 
+
+```{r}
+
+# Specify output dir
+output_dir <- "F:/_BRYCE/LiDAR/Ouray_County/las_normalized_catalog/"
+
+opt_stop_early(ctg) <- FALSE  # Continue processing even if an error occurs
+
+# Change filename and add new files to output dir
+opt_output_files(ctg) <- paste0(output_dir, "/{ORIGINALFILENAME}_normalized")
+
+plan(multisession, workers=2)
+set_lidr_threads(2L)
+
+ctg_norm <- normalize_height(ctg, tin(), na.rm=TRUE) # normalize
+              
+
+```
+
+That worked. There are quite a few points that failed for all the tiles with the warnings. Here are their indices:
+
+143/1394 : 14 points failed
+321      : 58
+322      : 55251
+479      : 50696
+485      : 128295
+518      : 16085
+521      : 21178
+523      : 46608
+563      : 12292
+565      : 104004
+606      : 39847
+610      : 156715
+1066     : 30
+1392     : 68
+
+I'm going to save a few of these as their own las tiles and inspect them to see if there's a good way to clean them up.
+
+```{r}
+
+idx610 <- readLAS(ctg_norm$filename[610])
+idx565 <- readLAS(ctg_norm$filename[565])
+idx485 <- readLAS(ctg_norm$filename[485])
+idx322 <- readLAS(ctg_norm$filename[322])
+
+plot(idx610)
+
+las_check(idx610)
+```
+
+To save messiness in this markdown file, I'm going to use the terminal to do `las_check()` and `plot()` on the remainder of the indexed files. 
+
+idx565 and idx322 are especially bad. What I'm going to do is find all 14 of these tiles and locate them in ArcGIS. I will inspect them to see if they overlap with any buildings. If they don't, then I don't care about them. To do that, I'm going to get the filenames from the index numbers using the code below.
+
+```{r}
+
+index_numbers <- c(143, 321, 322, 479, 485, 518, 521, 523, 563, 565, 606, 610, 1066, 1392)
+
+for (i in index_numbers) {
+  tile_filename <- ctg_norm$filename[i]
+  
+  print(tile_filename)
+}
+```
+
+Almost all of these tiles are in the high mountains where there are no structures. The only one that contains structures is idx321 (file number 4946) and it only has 58 failed points. So I think we're good to just move on.
+
+Now I will create lax files for each las in the normalized catalog using the code below.You can see the progress not only in the progress bar but also in the map below.
+
+```{r}
+
+lidR:::catalog_laxindex(ctg_norm)
+
+```
+
+Now that we have the `ctg_norm` indexed with `lax` files, we're ready to start deriving pixel-level metrics. For that, we will switch to a new rmarkdown file. This concludes LAS_Normalization!

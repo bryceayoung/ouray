@@ -1,0 +1,314 @@
+---
+title: "pixel_metrics"
+author: "Bryce A Young"
+date: "2024-10-02"
+output: html_document
+---
+
+Overview: this markdown file follows the other rmd files `lidar_exploration.rmd` and `las_normalization.rmd`. In those files, I explored the data, and then normalized the heights, creating a las catalog that is at the following path: "F:/_BRYCE/LiDAR/Ouray_County/las_normalized_catalog".
+
+In this document, I will use the normalized catalog to create rasters that represent the forest canopy across various parameters. 
+
+First, we're going to do a las_check() on some of the files to see if there are certain points that we should withhold when creating rasters. There may be data cleaning required.
+
+```{r}
+
+# Identify catalog
+ctg <- readLAScatalog("F:/_BRYCE/LiDAR/Ouray_County/las_normalized_catalog/", filter = '-drop_withheld -drop_class 18 -keep_z -1 40')
+
+```
+
+Now we're going to do a las_check on a few random files. Let's do it by index, and take 250, 500, 750 and 1000.
+
+```{r}
+
+test1 <- readLAS(ctg$filename[250])
+test2 <- readLAS(ctg$filename[500])
+test3 <- readLAS(ctg$filename[750])
+test4 <- readLAS(ctg$filename[1000])
+
+las_check(test1)
+las_check(test2)
+las_check(test3)
+las_check(test4)
+
+las_check(ctg)
+
+```
+
+For each of the test objects, and all of the other tests I did in previous rmd files, we see two primary issues: (1) pulses (points with the same gpstime) have points with identical ReturnNumber, (2) points below 0. The number of points below 0 are in the tens of thousands domain, and the gpstime pulses are in the hundreds or the thousands domain.
+
+Additionally, `las_check(ctg)` revealed that all the files have points below 0, there is an inconsistent CRS across files, and apparently the files aren't normalized, even though I just normalized them. 
+
+Until I get these resolved, I'm going to create canopy height models with my test objects and plot them for quality check.
+
+```{r}
+
+# Define color palette
+col <- brewer.pal(5, "Reds")
+
+chm1 <- rasterize_canopy(test1, res=1, algorithm=p2r())
+chm2 <- rasterize_canopy(test2, res=1, algorithm=p2r())
+chm3 <- rasterize_canopy(test3, res=1, algorithm=p2r())
+chm4 <- rasterize_canopy(test4, res=1, algorithm=p2r())
+
+plot(chm4, col=col)
+
+```
+```{r}
+
+output_path <- "F:/_BRYCE/LiDAR/Ouray_County/tiffs_from_las/ouray_chm.tif"
+
+chm <- rasterize_canopy(ctg, res=1, algorithm=p2r())
+
+writeRaster(chm, output_path)
+
+plot(chm, col=col)
+
+```
+
+Creating a CHM from the entire catalog with LZW compression will take about 1-2hrs.
+
+Now we are going to create more rasters from the catalog! Here are the `pixel_metrics()` that I'm going to get:
+
+- `zqx` : xth percentile (quantile) of height distribution
+- `zentropy` : entropy of height distribution
+- `itot` : sum of intensities for each return
+- `imax` : max intensity
+- `imean` : mean intensity
+- `ip1st` : percentage of intensity returned by 1st returns
+
+The intensity metrics can possibly help us segment buildings. The zentropy may give us insights to ladder fuels, the percentiles of height distribution can help us classify groups of building types. All will be interesting to see and explore on a map!
+
+```{r}
+
+start_time <- proc.time()
+
+# Calculate standard metrics
+metrics <- pixel_metrics(ctg, .stdmetrics, 1)
+
+end_time <- proc.time() - start_time
+# Convert elapsed time to seconds
+total_seconds <- end_time["elapsed"]
+
+# Convert to hours, minutes, and seconds
+hours <- floor(total_seconds / 3600)
+minutes <- floor((total_seconds %% 3600) / 60)
+seconds <- round(total_seconds %% 60)
+
+message(sprintf("Metrics took %d hours, %d minutes, and %d seconds to produce!", hours, minutes, seconds))
+
+```
+
+TESTING FUNCTIONS AND THEIR UTILITY
+
+```{r}
+# OPTIONAL: read catalog again
+# ctg <- readLAScatalog("F:/_BRYCE/LiDAR/Ouray_County/las_normalized_catalog/", filter = '-drop_withheld -drop_class 18 -keep_z -1 40')
+
+# Run these individually
+
+las <- readLAS("F:/_BRYCE/LiDAR/Ouray_County/las_normalized_catalog/usgs_lpc_co_sanluisjuanmiguel_2020_d20_13s_bc_6413_normalized.las", filter = '-drop_withheld -drop_class 18 -keep_z -1 40')
+
+zentropy <- pixel_metrics(las, ~entropy(Z, by=2), res=1) # Entropy of z values
+itot <- pixel_metrics(las, ~sum(Intensity), res=1)  # Sum of intensity of all returns
+imax <- pixel_metrics(las, ~max(Intensity), res=1)   # Max intensity
+imean <- pixel_metrics(las, ~mean(Intensity), res=1) # Mean intensity
+
+```
+Let's save these as tiffs and look at them in ArcGIS. 
+
+```{r}
+
+writeRaster(imax, "F:/_BRYCE/LiDAR/Ouray_County/_temp/imax_test_6413.tif")
+writeRaster(imean, "F:/_BRYCE/LiDAR/Ouray_County/_temp/imean_test_6413.tif")
+writeRaster(itot, "F:/_BRYCE/LiDAR/Ouray_County/_temp/itot_test_6413.tif")
+writeRaster(zentropy, "F:/_BRYCE/LiDAR/Ouray_County/_temp/zentropy_test2_6413.tif")
+
+```
+
+Viewing in ArcGIS, you can see that there is not much information in the intensity rasters. However, `zentropy` seems very promising for segmenting objects, including both buildings and trees. So let's run that function on the entire catalog.
+
+```{r}
+start_time <- proc.time()
+
+
+
+
+###########################################
+
+# Define catalog
+ctg <- readLAScatalog("F:/_BRYCE/LiDAR/Ouray_County/las_normalized_catalog/", filter = '-drop_withheld -drop_class 18 -keep_z -1 40')
+# Run function
+zentropy_ctg <- pixel_metrics(ctg, ~entropy(Z), res=1)
+
+# Write raster
+output_path <- "F:/_BRYCE/LiDAR/Ouray_County/tiffs_from_las/ouray_zentropy.tif"
+writeRaster(zentropy_ctg, output_path)
+
+
+###########################################
+
+
+
+end_time <- proc.time() - start_time
+# Convert elapsed time to seconds
+total_seconds <- end_time["elapsed"]
+
+# Convert to hours, minutes, and seconds
+hours <- floor(total_seconds / 3600)
+minutes <- floor((total_seconds %% 3600) / 60)
+seconds <- round(total_seconds %% 60)
+
+message(sprintf("Z-Entropy took %d hours, %d minutes, and %d seconds to produce and save to file!", hours, minutes, seconds))
+
+```
+
+Z-Entropy took 11 hours, 34 minutes, and 39 seconds to produce and save to file
+
+Now I want to make a binary raster where pixels are 0 or 1 if z values [ 0 < Z <= 2 ] are absent or present, respectively. 
+
+```{r}
+
+# Create a custom function to classify pixels based on the Z value
+custom_classification <- function(z) {
+  return(as.integer(any(z > 0 & z <= 2)))  # 1 if any point is in the range, otherwise 0
+}
+ladder_fuels <- pixel_metrics(las, ~custom_classification(Z), res = 1)
+plot(ladder_fuels)
+
+writeRaster(ladder_fuels, "F:/_BRYCE/LiDAR/Ouray_County/_temp/ladder_fuels_test_6413.tif")
+
+```
+
+It's unfortunate that the ladder fuels binary raster is biased towards higher pixel density where the LiDAR flight paths overlap. However, after exploring this in ArcGIS, I think there is enough information to get good information out of it, and at the very least it is great eye candy.So let's make this raster for the entire catalog. 
+
+```{r}
+start_time <- proc.time()
+
+
+
+
+###########################################
+# Run function
+ladder_fuels_ctg <- pixel_metrics(ctg, ~custom_classification(Z), res = 1)
+# Write raster
+output_path <- "F:/_BRYCE/LiDAR/Ouray_County/tiffs_from_las/ouray_ladderfuels.tif"
+writeRaster(ladder_fuels_ctg, output_path)
+
+
+###########################################
+
+
+
+end_time <- proc.time() - start_time
+# Convert elapsed time to seconds
+total_seconds <- end_time["elapsed"]
+
+# Convert to hours, minutes, and seconds
+hours <- floor(total_seconds / 3600)
+minutes <- floor((total_seconds %% 3600) / 60)
+seconds <- round(total_seconds %% 60)
+
+message(sprintf("Ladder fuels took %d hours, %d minutes, and %d seconds to produce and save to file!", hours, minutes, seconds))
+```
+
+
+Ladder fuels took 4 hours, 23 minutes, and 51 seconds to produce and save to file!
+
+The diagonal striping pattern in `ladder_fuels` and `zentropy` is due to uneven point density. We can handle this by normalizing the rasters by point density. We will do this in python later, but now, to do this, we need to create a point density raster. See below:
+
+```{r}
+start_time <- proc.time()
+
+
+
+
+###########################################
+point_density <- grid_density(ctg, res=1)
+output_path <- "F:/_BRYCE/LiDAR/Ouray_County/tiffs_from_las/ouray_pointDensity.tif"
+writeRaster(point_density, output_path)
+
+###########################################
+
+
+
+end_time <- proc.time() - start_time
+# Convert elapsed time to seconds
+total_seconds <- end_time["elapsed"]
+
+# Convert to hours, minutes, and seconds
+hours <- floor(total_seconds / 3600)
+minutes <- floor((total_seconds %% 3600) / 60)
+seconds <- round(total_seconds %% 60)
+
+message(sprintf("Point density took %d hours, %d minutes, and %d seconds to produce and save to file!", hours, minutes, seconds))
+```
+
+Point density took 2 hours, 28 minutes, and 32 seconds to produce and save to file!
+
+Now let's do some canopy cover metrics at various height classes.
+
+```{r}
+# Canopy closure less than 2m tall
+cc2m    <- function(z, RetNum) {
+  return(length(z[z>0 & z<=2 & RetNum==1]) / length(z[RetNum==1]))
+}
+# Canopy closure 2-4m tall
+cc2_4m  <- function(z, RetNum) {
+  return(length(z[z>2 & z<=4 & RetNum==1]) / length(z[RetNum==1]))
+}
+# canopy closure 4-8m tall
+cc4_8m  <- function(z, RetNum) {
+  return(length(z[z>4 & z<=8 & RetNum==1]) / length(z[RetNum==1]))
+}
+# canopy closure 8m+ tall (max 40m)
+cc8_40m <- function(z, RetNum) {
+  return(length(z[z>8 & RetNum==1]) / length(z[RetNum==1]))
+}
+
+```
+
+Functions are defined, now we pass them in pixel metrics
+
+```{r}
+start_time <- proc.time()
+
+
+
+
+###########################################
+cc2m_object <- pixel_metrics(ctg, ~cc2m(Z, ReturnNumber), res=1)
+cc2_4m_object <- pixel_metrics(ctg, ~cc2_4m(Z, ReturnNumber), res=1)
+cc4_8m_object <- pixel_metrics(ctg, ~cc4_8m(Z, ReturnNumber), res=1)
+cc8_40m_object <- pixel_metrics(ctg, ~cc8_40m(Z, ReturnNumber), res=1)
+
+writeRaster(cc2m_object, "F:/_BRYCE/LiDAR/Ouray_County/tiffs_from_las/ouray_cc2m.tif")
+writeRaster(cc2_4m_object, "F:/_BRYCE/LiDAR/Ouray_County/tiffs_from_las/ouray_cc2_4m.tif")
+writeRaster(cc4_8m_object, "F:/_BRYCE/LiDAR/Ouray_County/tiffs_from_las/ouray_cc4_8m.tif")
+writeRaster(cc8_40m_object, "F:/_BRYCE/LiDAR/Ouray_County/tiffs_from_las/ouray_cc8_40m.tif")
+
+###########################################
+
+
+
+end_time <- proc.time() - start_time
+# Convert elapsed time to seconds
+total_seconds <- end_time["elapsed"]
+
+# Convert to hours, minutes, and seconds
+hours <- floor(total_seconds / 3600)
+minutes <- floor((total_seconds %% 3600) / 60)
+seconds <- round(total_seconds %% 60)
+
+message(sprintf("Canopy closure metrics took %d hours, %d minutes, and %d seconds to produce and save to file!", hours, minutes, seconds))
+
+```
+
+text
+
+```{r}
+
+
+
+```
