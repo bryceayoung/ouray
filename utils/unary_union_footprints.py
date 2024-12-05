@@ -5,13 +5,14 @@ import geopandas as gpd
 from shapely.geometry import Polygon
 
 # Import polygon
-gdf_g = gpd.read_file('Documents/Projects/GUC_ParcelLevelRisk/Data/Gunnison_County_Buildings/Gunnison_County_Buildings.shp') # EPSG:4326 - WGS84 - World Geodetic System 1984
+file_path = 'Documents/Projects/GUC_ParcelLevelRisk/Data/Gunnison_County_Buildings/Gunnison_County_Buildings.shp'
+gdf_g = gpd.read_file(file_path) # EPSG:4326 - WGS84 - World Geodetic System 1984
 
 #Global variables
 CRS = 'EPSG:5070'    # USA Contiguous Albers Equal Area Conic Projection
 
 # Project coordinate system
-gdf_p = gdf.to_crs(CRS)
+gdf_p = gdf_g.to_crs(CRS)
 
 # Create a broader boundary encompassing all of the buildings
 total_building_vector = gdf_p.unary_union
