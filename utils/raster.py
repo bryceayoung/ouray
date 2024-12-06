@@ -1,3 +1,6 @@
+import rasterio as rio
+import numpy as np
+
 class FillNaN:
     def __init__(self, method="mean"):
         """
