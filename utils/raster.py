@@ -46,3 +46,44 @@ class FillNaN:
     fill_max = FillNaN(method="max")
     arr_filled_max = generic_filter(arr, fill_max, size=(3, 3), mode='reflect')
     '''
+
+def read_raster(file_path, layer=None, transform=False, shape=False, profile=False, crs=False):
+    """
+    Reads rasters and assigns them to numpy array objects
+
+    Parameters:
+    - file_path (str): path to the raster file
+    - layer (int): the layer to read (default is None which will read all layers)
+    - transform (bool): returns the raster transform (default is false)
+    - shape (bool): returns the raster shape (default is false)
+    - profile (bool): returns the raster profile, which is all GDAL metadata (default is false)
+    - crs (bool): returns the raster crs (default is false)
+
+    Returns:
+    - tuple of requested objects
+
+    Dependencies:
+    - import numpy as np
+    - import rasterio as rio
+
+    --------------------------------------
+    Example usage for single-layer raster:
+    raster, raster_transform, raster_crs = read_raster('file_path.tif', layer=1, transform=True, crs=True)
+
+    Example usage for multi-layer raster:
+    raster_stack, raster_stack_profile = read_raster('file_path.tif', profile=True)
+
+    """
+    with rio.open(file_path) as src:
+        data = src.read(layer)
+        return_values = [data]
+        if transform:
+            return_values.append(src.transform)
+        if shape:
+            return_values.append(src.shape)
+        if profile:
+            return_values.append(src.profile)
+        if crs:
+            return_values.append(src.crs)
+    
+    return tuple(return_values) if len(return_values) > 1 else data
