@@ -90,3 +90,53 @@ def read_raster(file_path, layer=None, transform=False, shape=False, profile=Fal
             return_values.append(src.crs)
     
     return tuple(return_values) if len(return_values) > 1 else data
+
+import rasterio
+from rasterio.merge import merge
+from rasterio.plot import show
+import matplotlib.pyplot as plt
+
+def mosaic_rasters(input_files, output_file):
+    """
+    Mosaics multiple rasters into a single raster.
+
+    Args:
+        input_files (list): List of file paths to the input rasters.
+        output_file (str): Path to the output raster.
+
+    Returns:
+        None
+
+    Example usage:
+        input_files = [
+            "path/to/raster1.tif",
+            "path/to/raster2.tif"
+        ]
+        output_file = "path/to/mosaic.tif"
+
+        mosaic_rasters(input_files, output_file)
+    """
+    # Open all rasters and add them to a list
+    src_files_to_mosaic = [rasterio.open(f) for f in input_files]
+
+    # Merge rasters
+    mosaic, out_trans = merge(src_files_to_mosaic)
+
+    # Copy the metadata from one of the input rasters
+    out_profile = src_files_to_mosaic[0].profile.copy()
+    out_profile.update({
+        "driver": "GTiff",
+        "height": mosaic.shape[1],
+        "width": mosaic.shape[2],
+        "transform": out_trans
+    })
+
+    # Write the mosaic to the output file
+    with rasterio.open(output_file, "w", **out_meta) as dest:
+        dest.write(mosaic)
+
+    # Close all input files
+    for src in src_files_to_mosaic:
+        src.close()
+
+    print(f"Mosaic written to {output_file}")
