@@ -132,7 +132,7 @@ def mosaic_rasters(input_files, output_file):
     })
 
     # Write the mosaic to the output file
-    with rasterio.open(output_file, "w", **out_meta) as dest:
+    with rasterio.open(output_file, "w", **out_profile) as dest:
         dest.write(mosaic)
 
     # Close all input files
