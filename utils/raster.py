@@ -140,3 +140,91 @@ def mosaic_rasters(input_files, output_file):
         src.close()
 
     print(f"Mosaic written to {output_file}")
+
+def clip_raster_to_shape(raster, reference, profile):
+    """
+    Clips a raster to the extent of a reference raster and updates the metadata with new dimensions.
+    Assumes rasters have the same upper left pixel coordinate (affine transform).
+    Assumes 2-dimensional arrays e.g. shape = (10, 10) as opposed to (1, 10, 10)
+
+    Parameters:
+    - raster(numpy array): the numpy array to be clipped
+    - reference(numpy array): the numpy array to clip to
+    - profile(dict): the GDAL profile (metadata) of the raster to be clipped
+
+    Returns:
+    - clipped_data (numpy array): clipped raster with dimensions matching the reference
+    - profile (dict): updates 'width' and 'height' values of existing profile
+    
+    Dependencies:
+    - import numpy as np
+
+    ------------------------------
+    Example usage:
+    raster1_clipped, raster1_profile = clip_raster_to_shape(raster1, raster2, raster1_profile)
+    """
+
+    clipped_data = raster[:reference.shape[0], :reference.shape[1]]
+    
+    profile.update({
+        'height': reference.shape[0],
+        'width': reference.shape[1]
+    })
+    return clipped_data, profile
+
+def rast_and_write(gdf, dst_path, profile, mask=None, dtype='float32', nodata=-9999, **kwargs):
+    '''
+    Function to rasterize a shapefile such as fire perimeters and write it to a tif file
+
+    ------
+    Parameters: 
+    - gdf (GeoDataFrame): the shapefilfe in geodataframe format
+    - dst_path (str): output file path for the raster
+    - profile (dict): dictionary containing GDAL raster metadata
+        - can be obtained from read_raster function, defined above
+    - mask (numpy.ndarray, optional): raster mask to apply to the output to define where `nodata` should be applied
+        - example would be a rasterized state boundary
+    - dtype (str): data type for the raster to be created
+    - nodata (float or int, optional): nodata value to assign to areas outside the mask
+    - **kwargs: additional optional keyword arguments for the raster profile update
+
+    -----
+    Returns:
+    None: saves the rasterized outpuit to the specified file path
+
+    -----
+    Dependencies:
+    import numpy as np
+    import rasterio as rio
+    from rasterio.features import rasterize
+
+    -----
+    Example usage:
+    raster, profile = read_raster('file/path/raster.tif', profile=True)
+
+    in_shapes = [perims1, perims2, perims3, perims4]
+    out_rasters = ['file/path/perims1_raster.tif', 'file/path/perims2_raster.tif', 'file/path/perims3_raster.tif', 'file/path/perims4_raster.tif']
+    
+    for gdf, dst_path in zip(in_shapes, out_rasters):
+        rast_and_write(gdf, dst_path, profile=profile, mask=state_boundary_raster)
+
+    '''
+    # Update the profile with any additional keyword arguments
+    raster_profile.update(kwargs)
+
+    # Create the rasterized data
+    rasterized = rasterize(
+        [(geom, 1) for geom in in_shape.geometry],
+        out_shape=(raster_profile['height'], raster_profile['width']),
+        fill=0,
+        transform=raster_profile['transform'],
+        dtype='float32'
+    )
+
+    # Apply the mask, if provided
+    if mask is not None:
+        rasterized = np.where(mask == 1, rasterized, nodata)
+
+    # Write the rasterized result to the output file
+    with rio.open(out_raster, 'w', **raster_profile) as dst:
+        dst.write(rasterized, 1)
