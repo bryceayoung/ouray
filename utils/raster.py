@@ -210,15 +210,15 @@ def rast_and_write(gdf, dst_path, profile, mask=None, dtype='float32', nodata=-9
 
     '''
     # Update the profile with any additional keyword arguments
-    raster_profile.update(kwargs)
+    profile.update(kwargs)
 
     # Create the rasterized data
     rasterized = rasterize(
         [(geom, 1) for geom in in_shape.geometry],
-        out_shape=(raster_profile['height'], raster_profile['width']),
+        out_shape=(profile['height'], profile['width']),
         fill=0,
-        transform=raster_profile['transform'],
-        dtype='float32'
+        transform=profile['transform'],
+        dtype=dtype
     )
 
     # Apply the mask, if provided
@@ -226,5 +226,5 @@ def rast_and_write(gdf, dst_path, profile, mask=None, dtype='float32', nodata=-9
         rasterized = np.where(mask == 1, rasterized, nodata)
 
     # Write the rasterized result to the output file
-    with rio.open(out_raster, 'w', **raster_profile) as dst:
+    with rio.open(out_raster, 'w', **profile) as dst:
         dst.write(rasterized, 1)
