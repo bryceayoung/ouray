@@ -172,6 +172,8 @@ def clip_raster_to_shape(raster, reference, profile):
     })
     return clipped_data, profile
 
+from rasterio.features import rasterize
+
 def rast_and_write(gdf, dst_path, profile, mask=None, dtype='float32', nodata=-9999, **kwargs):
     '''
     Function to rasterize a shapefile such as fire perimeters and write it to a tif file
