@@ -220,7 +220,7 @@ def rast_and_write(gdf, dst_path, profile, mask=None, **kwargs):
         out_shape=(profile['height'], profile['width']),
         fill=0,
         transform=profile['transform'],
-        dtype=dtype
+        dtype=profile['dtype']
     )
 
     # Apply the mask, if provided
