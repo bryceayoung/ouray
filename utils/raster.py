@@ -228,5 +228,5 @@ def rast_and_write(gdf, dst_path, profile, mask=None, dtype='float32', nodata=-9
         rasterized = np.where(mask == 1, rasterized, nodata)
 
     # Write the rasterized result to the output file
-    with rio.open(out_raster, 'w', **profile) as dst:
+    with rio.open(dst_path, 'w', **profile) as dst:
         dst.write(rasterized, 1)
