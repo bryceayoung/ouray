@@ -216,7 +216,7 @@ def rast_and_write(gdf, dst_path, profile, mask=None, dtype='float32', nodata=-9
 
     # Create the rasterized data
     rasterized = rasterize(
-        [(geom, 1) for geom in in_shape.geometry],
+        [(geom, 1) for geom in gdf.geometry],
         out_shape=(profile['height'], profile['width']),
         fill=0,
         transform=profile['transform'],
