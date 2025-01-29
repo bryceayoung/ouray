@@ -10,11 +10,31 @@ Overview: this markdown file follows the other rmd files `lidar_exploration.rmd`
 In this document, I will use the normalized catalog to create rasters that represent the forest canopy across various parameters. 
 
 First, we're going to do a las_check() on some of the files to see if there are certain points that we should withhold when creating rasters. There may be data cleaning required.
+```{r}
+
+ctg_path <- "X:/Young_LiDAR/Ouray_County/las_normalized_catalog/"
+output <- ""
+
+```
+
+Load the correct packages
+
+```{r}
+
+library(terra)
+library(sf)
+library(sp)
+library(raster)
+library(lidR)
+
+```
+
+Now we can read in the las catalog! This will take a few minutes.
 
 ```{r}
 
 # Identify catalog
-ctg <- readLAScatalog("F:/_BRYCE/LiDAR/Ouray_County/las_normalized_catalog/", filter = '-drop_withheld -drop_class 18 -keep_z -1 40')
+ctg <- readLAScatalog(ctg_path, filter = '-drop_withheld -drop_class 18 -keep_z -1 40')
 
 ```
 
