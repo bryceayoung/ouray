@@ -2,6 +2,7 @@
 title: "pixel_metrics"
 author: "Bryce A Young"
 date: "2024-10-02"
+modified: "2025-01-29"
 output: html_document
 ---
 
@@ -12,8 +13,10 @@ In this document, I will use the normalized catalog to create rasters that repre
 First, we're going to do a las_check() on some of the files to see if there are certain points that we should withhold when creating rasters. There may be data cleaning required.
 ```{r}
 
-ctg_path <- "X:/Young_LiDAR/Ouray_County/las_normalized_catalog/"
-output <- ""
+data_path <- "D:/_PROJECTS/P001_OurayParcel/data"
+ctg_path <- file.path(data_path, "las_normalized_catalog")
+out_path <- file.path(data_path, "tiffs_from_las")
+scratch <- file.path(data_path, "_temp")
 
 ```
 
@@ -26,6 +29,7 @@ library(sf)
 library(sp)
 library(raster)
 library(lidR)
+library(RColorBrewer)
 
 ```
 
@@ -67,21 +71,53 @@ Until I get these resolved, I'm going to create canopy height models with my tes
 # Define color palette
 col <- brewer.pal(5, "Reds")
 
-chm1 <- rasterize_canopy(test1, res=1, algorithm=p2r())
-chm2 <- rasterize_canopy(test2, res=1, algorithm=p2r())
-chm3 <- rasterize_canopy(test3, res=1, algorithm=p2r())
-chm4 <- rasterize_canopy(test4, res=1, algorithm=p2r())
+# Define CRS
+crs = CRS("EPSG:26913")
+
+chm1 <- rasterize_canopy(test1, res=1, algorithm=p2r(), crs=crs)
+chm2 <- rasterize_canopy(test2, res=1, algorithm=p2r(), crs=crs)
+chm3 <- rasterize_canopy(test3, res=1, algorithm=p2r(), crs=crs)
+chm4 <- rasterize_canopy(test4, res=1, algorithm=p2r(), crs=crs)
 
 plot(chm4, col=col)
 
 ```
+
+Now we are going to print the crs to make sure it was assigned correctly, and we're going to save the files to the `_temp` folder where we can again verify this in ArcGIS.
+
+I ran `terra::crs(chm1)` in the R terminal and can see that the desired EPSG was not assigned.
+It still has the vertical component that I want to get rid of.
+So below, we're going to try to change this.
+
 ```{r}
 
-output_path <- "F:/_BRYCE/LiDAR/Ouray_County/tiffs_from_las/ouray_chm.tif"
+terra::crs(chm1) <- CRS("EPSG:26913")
+print(terra::crs(chm1))
+
+```
+
+That worked! So let's save this as a file and view in ArcGIS to make sure that the changes were applied.
+
+```{r}
+
+writeRaster(chm1, file.path(scratch, "chm1.tif"))
+
+```
+
+Great, the good news is that it appears in ArcGIS and is assigned the correct CRS!
+Now we're just going to be extra sure about this by checking out the raster in Python.
+Everything looks good. Now let's apply that exact same code to the full county CRS.
+
+```{r}
 
 chm <- rasterize_canopy(ctg, res=1, algorithm=p2r())
+terra::crs(chm) <- CRS("EPSG:26913")
 
-writeRaster(chm, output_path)
+print(terra::crs(chm))
+```
+
+```{r}
+writeRaster(chm, file.path(out_path, "chm.tif"))
 
 plot(chm, col=col)
 
