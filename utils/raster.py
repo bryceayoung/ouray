@@ -91,6 +91,29 @@ def read_raster(file_path, layer=None, transform=False, shape=False, profile=Fal
     
     return tuple(return_values) if len(return_values) > 1 else data
 
+def write_raster(output_path, raster_array, profile):
+    """
+    Writes a NumPy array as a raster file using Rasterio.
+
+    Parameters:
+    - output_path (str): Path to save the raster file.
+    - raster_array (numpy.ndarray): 2D NumPy array of raster values.
+    - profile (dict): Rasterio profile (metadata) containing transform, CRS, dtype, etc.
+
+    Returns:
+    - None (writes raster to file)
+    """
+    
+    # Ensure the data type matches the profile
+    if raster_array.dtype != np.dtype(profile["dtype"]):
+        raster_array = raster_array.astype(profile["dtype"])
+
+    # Write raster
+    with rio.open(output_path, "w", **profile) as dst:
+        dst.write(raster_array, 1)  # Writing as Band 1
+
+    print(f"✅ Raster written to: {output_path}")
+
 import rasterio
 from rasterio.merge import merge
 from rasterio.plot import show
@@ -141,7 +164,7 @@ def mosaic_rasters(input_files, output_file):
 
     print(f"Mosaic written to {output_file}")
 
-def clip_raster_to_shape(raster, reference, profile):
+def ez_clip(raster, reference, profile):
     """
     Clips a raster to the extent of a reference raster and updates the metadata with new dimensions.
     Assumes rasters have the same upper left pixel coordinate (affine transform).
@@ -161,7 +184,7 @@ def clip_raster_to_shape(raster, reference, profile):
 
     ------------------------------
     Example usage:
-    raster1_clipped, raster1_profile = clip_raster_to_shape(raster1, raster2, raster1_profile)
+    raster1_clipped, raster1_profile = ez_clip(raster1, raster2, raster1_profile)
     """
 
     clipped_data = raster[:reference.shape[0], :reference.shape[1]]
@@ -171,6 +194,61 @@ def clip_raster_to_shape(raster, reference, profile):
         'width': reference.shape[1]
     })
     return clipped_data, profile
+
+import numpy as np
+from affine import Affine
+import rasterio as rio
+
+def clip_raster(large_raster, small_raster, large_profile, small_profile):
+    """
+    Clips a larger raster to the same extent and shape as a smaller raster and applies a nodata mask.
+    
+    Parameters:
+    - large_raster (numpy array): The larger raster to be clipped.
+    - small_raster (numpy array): The smaller raster defining the clip extent.
+    - large_profile (dict): Metadata (profile) of the larger raster.
+    - small_profile (dict): Metadata (profile) of the smaller raster.
+
+    Returns:
+    - clipped_raster (numpy array): The clipped and masked raster.
+    - updated_profile (dict): Updated profile with new 'width', 'height', and 'transform'.
+    """
+
+    # Extract transform and shape details
+    large_transform = large_profile["transform"]
+    small_transform = small_profile["transform"]
+    small_height, small_width = small_raster.shape
+
+    # Calculate pixel offsets (row/col) in the large raster corresponding to the small raster's extent
+    row_off = int((small_transform.f - large_transform.f) / large_transform.e)
+    col_off = int((small_transform.c - large_transform.c) / large_transform.a)
+
+    # Clip the large raster to match the small raster’s extent
+    clipped_raster = large_raster[row_off:row_off + small_height, col_off:col_off + small_width]
+
+    # Apply the small raster's nodata mask
+    small_nodata = small_profile.get("nodata", None)
+    large_nodata = large_profile.get("nodata", None)
+
+    if small_nodata is not None:
+        mask = (small_raster == small_nodata)
+        clipped_raster[mask] = large_nodata if large_nodata is not None else np.nan
+
+    # Update the transform for the clipped raster
+    updated_transform = rio.transform.from_origin(
+        small_transform.c, small_transform.f,  # Top-left corner of the smaller raster
+        small_transform.a, -small_transform.e  # Pixel width/height (unchanged)
+    )
+
+    # Update the profile
+    updated_profile = large_profile.copy()
+    updated_profile.update({
+        'height': small_height,
+        'width': small_width,
+        'transform': updated_transform
+    })
+
+    return clipped_raster, updated_profile
 
 from rasterio.features import rasterize
 
