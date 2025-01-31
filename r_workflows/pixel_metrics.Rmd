@@ -136,6 +136,8 @@ Now we are going to create more rasters from the catalog! Here are the `pixel_me
 
 The intensity metrics can possibly help us segment buildings. The zentropy may give us insights to ladder fuels, the percentiles of height distribution can help us classify groups of building types. All will be interesting to see and explore on a map!
 
+Don't run the code block below. This is great for single tiles but takes days for the entire county.
+
 ```{r}
 
 start_time <- proc.time()
@@ -164,22 +166,35 @@ TESTING FUNCTIONS AND THEIR UTILITY
 
 # Run these individually
 
-las <- readLAS("F:/_BRYCE/LiDAR/Ouray_County/las_normalized_catalog/usgs_lpc_co_sanluisjuanmiguel_2020_d20_13s_bc_6413_normalized.las", filter = '-drop_withheld -drop_class 18 -keep_z -1 40')
+las <- readLAS(file.path(ctg_path, "usgs_lpc_co_sanluisjuanmiguel_2020_d20_13s_bc_6413_normalized.las"), filter = '-drop_withheld -drop_class 18 -keep_z -1 40')
 
 zentropy <- pixel_metrics(las, ~entropy(Z, by=2), res=1) # Entropy of z values
 itot <- pixel_metrics(las, ~sum(Intensity), res=1)  # Sum of intensity of all returns
 imax <- pixel_metrics(las, ~max(Intensity), res=1)   # Max intensity
 imean <- pixel_metrics(las, ~mean(Intensity), res=1) # Mean intensity
 
+terra::crs(zentropy) <- CRS("EPSG:26913")
+terra::crs(itot) <- CRS("EPSG:26913")
+terra::crs(imean) <- CRS("EPSG:26913")
+terra::crs(imax) <- CRS("EPSG:26913")
+
 ```
 Let's save these as tiffs and look at them in ArcGIS. 
 
 ```{r}
 
-writeRaster(imax, "F:/_BRYCE/LiDAR/Ouray_County/_temp/imax_test_6413.tif")
-writeRaster(imean, "F:/_BRYCE/LiDAR/Ouray_County/_temp/imean_test_6413.tif")
-writeRaster(itot, "F:/_BRYCE/LiDAR/Ouray_County/_temp/itot_test_6413.tif")
-writeRaster(zentropy, "F:/_BRYCE/LiDAR/Ouray_County/_temp/zentropy_test2_6413.tif")
+terra::crs(zentropy) <- "EPSG:26913"
+print(terra::crs(zentropy))
+
+```
+
+
+```{r}
+
+writeRaster(imax, file.path(scratch, "imax_test_WKID26913.tif"))
+writeRaster(imean, file.path(scratch, "imean_test_WKID26913.tif"))
+writeRaster(itot, file.path(scratch, "itot_test_WKID26913.tif"))
+writeRaster(zentropy, file.path(scratch, "zentropy_test_WKID26913.tif"))
 
 ```
 
@@ -190,17 +205,16 @@ start_time <- proc.time()
 
 
 
-
 ###########################################
 
 # Define catalog
-ctg <- readLAScatalog("F:/_BRYCE/LiDAR/Ouray_County/las_normalized_catalog/", filter = '-drop_withheld -drop_class 18 -keep_z -1 40')
+ctg <- readLAScatalog(ctg_path, filter = '-drop_withheld -drop_class 18 -keep_z -1 40')
 # Run function
-zentropy_ctg <- pixel_metrics(ctg, ~entropy(Z), res=1)
+zentropy <- pixel_metrics(ctg, ~entropy(Z), res=1)
+terra::crs(zentropy) <- "EPSG:26913"
 
 # Write raster
-output_path <- "F:/_BRYCE/LiDAR/Ouray_County/tiffs_from_las/ouray_zentropy.tif"
-writeRaster(zentropy_ctg, output_path)
+writeRaster(zentropy, file.path(out_path, "zentropy_WKID26913.tif"))
 
 
 ###########################################
@@ -220,37 +234,30 @@ message(sprintf("Z-Entropy took %d hours, %d minutes, and %d seconds to produce 
 
 ```
 
-Z-Entropy took 11 hours, 34 minutes, and 39 seconds to produce and save to file
+1st run on UM lab computer:
+Z-Entropy took 11 hours, 34 minutes, and 39 seconds to produce and save to file!
+
+2nd run on Waffle (personal PC in Red Lodge):
+AMD Ryzen 9 9950X 16-Core Processor (4.30 GHz), 128GB RAM, NVIDIA GeForce 3080 GPU
+**Z-Entropy took 3 hours, 1 minutes, and 19 seconds to produce and save to file!**
 
 Now I want to make a binary raster where pixels are 0 or 1 if z values [ 0 < Z <= 2 ] are absent or present, respectively. 
 
 ```{r}
+start_time <- proc.time()
 
 # Create a custom function to classify pixels based on the Z value
 custom_classification <- function(z) {
   return(as.integer(any(z > 0 & z <= 2)))  # 1 if any point is in the range, otherwise 0
 }
-ladder_fuels <- pixel_metrics(las, ~custom_classification(Z), res = 1)
-plot(ladder_fuels)
-
-writeRaster(ladder_fuels, "F:/_BRYCE/LiDAR/Ouray_County/_temp/ladder_fuels_test_6413.tif")
-
-```
-
-It's unfortunate that the ladder fuels binary raster is biased towards higher pixel density where the LiDAR flight paths overlap. However, after exploring this in ArcGIS, I think there is enough information to get good information out of it, and at the very least it is great eye candy.So let's make this raster for the entire catalog. 
-
-```{r}
-start_time <- proc.time()
-
-
-
 
 ###########################################
 # Run function
-ladder_fuels_ctg <- pixel_metrics(ctg, ~custom_classification(Z), res = 1)
+ladder_fuels <- pixel_metrics(ctg, ~custom_classification(Z), res = 1)
+# Set CRS
+terra::crs(ladder_fuels) <- "EPSG:26913"
 # Write raster
-output_path <- "F:/_BRYCE/LiDAR/Ouray_County/tiffs_from_las/ouray_ladderfuels.tif"
-writeRaster(ladder_fuels_ctg, output_path)
+writeRaster(ladder_fuels, file.path(out_path, "ladder_WKID26913.tif"))
 
 
 ###########################################
@@ -269,8 +276,11 @@ seconds <- round(total_seconds %% 60)
 message(sprintf("Ladder fuels took %d hours, %d minutes, and %d seconds to produce and save to file!", hours, minutes, seconds))
 ```
 
-
+1st run on UM lab computer:
 Ladder fuels took 4 hours, 23 minutes, and 51 seconds to produce and save to file!
+
+2nd run on Waffle:
+**Ladder fuels took 1 hours, 23 minutes, and 53 seconds to produce and save to file!**
 
 The diagonal striping pattern in `ladder_fuels` and `zentropy` is due to uneven point density. We can handle this by normalizing the rasters by point density. We will do this in python later, but now, to do this, we need to create a point density raster. See below:
 
@@ -282,8 +292,9 @@ start_time <- proc.time()
 
 ###########################################
 point_density <- grid_density(ctg, res=1)
-output_path <- "F:/_BRYCE/LiDAR/Ouray_County/tiffs_from_las/ouray_pointDensity.tif"
-writeRaster(point_density, output_path)
+terra::crs(point_density) <- "EPSG:26913"
+
+writeRaster(point_density, file.path(out_path, "density_WKID26913.tif"))
 
 ###########################################
 
@@ -301,7 +312,11 @@ seconds <- round(total_seconds %% 60)
 message(sprintf("Point density took %d hours, %d minutes, and %d seconds to produce and save to file!", hours, minutes, seconds))
 ```
 
+1st run on UM lab computer:
 Point density took 2 hours, 28 minutes, and 32 seconds to produce and save to file!
+
+2nd run on Waffle:
+**Point density took 0 hours, 35 minutes, and 35 seconds to produce and save to file!**
 
 Now let's do some canopy cover metrics at various height classes.
 
@@ -339,10 +354,15 @@ cc2_4m_object <- pixel_metrics(ctg, ~cc2_4m(Z, ReturnNumber), res=1)
 cc4_8m_object <- pixel_metrics(ctg, ~cc4_8m(Z, ReturnNumber), res=1)
 cc8_40m_object <- pixel_metrics(ctg, ~cc8_40m(Z, ReturnNumber), res=1)
 
-writeRaster(cc2m_object, "F:/_BRYCE/LiDAR/Ouray_County/tiffs_from_las/ouray_cc2m.tif")
-writeRaster(cc2_4m_object, "F:/_BRYCE/LiDAR/Ouray_County/tiffs_from_las/ouray_cc2_4m.tif")
-writeRaster(cc4_8m_object, "F:/_BRYCE/LiDAR/Ouray_County/tiffs_from_las/ouray_cc4_8m.tif")
-writeRaster(cc8_40m_object, "F:/_BRYCE/LiDAR/Ouray_County/tiffs_from_las/ouray_cc8_40m.tif")
+terra::crs(cc2m_object) <- "EPSG:26913"
+terra::crs(cc2_4m_object) <- "EPSG:26913"
+terra::crs(cc4_8m_object) <- "EPSG:26913"
+terra::crs(cc8_40m_object) <- "EPSG:26913"
+
+writeRaster(cc2m_object, file.path(out_path, "cc2m_WKID26913.tif"))
+writeRaster(cc2_4m_object, file.path(out_path, "cc2_4m_WKID26913.tif"))
+writeRaster(cc4_8m_object, file.path(out_path, "cc4_8m_WKID26913.tif"))
+writeRaster(cc8_40m_object, file.path(out_path, "cc8_40m_WKID26913.tif"))
 
 ###########################################
 
@@ -361,7 +381,10 @@ message(sprintf("Canopy closure metrics took %d hours, %d minutes, and %d second
 
 ```
 
-text
+I did not document how long this took on my lab computer.
+
+2nd run on Waffle:
+**Canopy closure metrics took 6 hours, 21 minutes, and 58 seconds to produce and save to file!**
 
 ```{r}
 
