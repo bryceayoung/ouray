@@ -34,6 +34,45 @@ def get_hiz(footprints, z1 = 2, z2 = 10, z3 = 30, z4 = 60):
     # Return enhanced GeoDataFrame
     return footprints
 
+def simple_hiz(footprints, id_column, buffer = 2, outer = 32):
+    '''
+    Creates a simple ring buffer around building footprints for HIZ analysis.
+
+    NOTES: 
+        - The unit of measurement will depend on your CRS (assumes CRS units in meters)
+        - Creates a single buffer ring with a gap defined by the 'buffer' and 'outer' distances.
+    
+    Parameters
+    ------------------
+    - footprints: GeoDataFrame with building footprints.
+    - id_column: Name of the column in footprints containing unique identifier corresponding to geoms
+    - buffer: Inner distance (from the building footprint) of the ring.
+    - outer: Outer distance (from the building footprint) of the ring.
+
+    Returns:
+    ------------------
+    - GeoDataFrame with original footprints with 'geometry' column as HIZ buffer.
+    '''
+    
+    # Create buffer around footprints at the 'buffer' distance
+    buffer_inner = footprints.buffer(distance = buffer)
+    
+    # Create outer buffer by using the 'outer' distance
+    buffer_outer = footprints.buffer(distance = outer)
+    
+    # Calculate the difference between the two buffers to create the ring (HIZ)
+    hiz = buffer_outer.difference(buffer_inner)
+    
+    # Create a new GeoDataFrame to hold the result
+    result_gdf = footprints[[id_column, 'geometry']].copy()
+    
+    # Assign the HIZ ring as the geometry
+    result_gdf['geometry'] = hiz
+    
+    # Return the new GeoDataFrame with HIZ geometry and matching IDs
+    return result_gdf
+
+
 def map_hiz(buildings_gdf, buffers_dict, center_coord, zoom = 10): # Optional: county_gdf
     """
     Create a Folium map with building footprints and buffer zones.
