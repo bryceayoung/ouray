@@ -161,7 +161,7 @@ def map_hiz(buildings_gdf, buffers_dict, center_coord, zoom = 10): # Optional: c
 
 def structures_per_zone(gdf, footprint_col, buffer_cols):
     """
-    Count intersections between a given footprint and buffer zones in the same GeoDataFrame.
+    Count intersections between buffer zones and building footprints in the same GeoDataFrame.
 
     Parameters:
     ----------------
@@ -195,3 +195,104 @@ def structures_per_zone(gdf, footprint_col, buffer_cols):
             counts_df.at[index, buffer_col] = other_footprints.intersects(structure[buffer_col]).sum()
 
     return counts_df
+
+import pandas as pd
+
+def structures_in_hiz(footprints_gdf, hiz_gdf, footprint_col='geometry', hiz_col='geometry'):
+    """
+    Count intersections between each building footprint and its corresponding HIZ geometry.
+    
+    Parameters:
+    ----------------
+    - footprints_gdf: GeoDataFrame containing building footprints.
+    - hiz_gdf: GeoDataFrame containing HIZ geometries.
+    - footprint_col: The column name containing footprint geometries (default 'geometry').
+    - hiz_col: The column name containing HIZ geometries (default 'geometry').
+
+    Returns:
+    ----------------
+    - A DataFrame with the number of adjacent structures (intersections) for each footprint and its corresponding HIZ.
+    
+    Examples:
+    ----------------
+    result_df = structures_in_hiz(footprints_gdf, hiz_gdf)
+    result_df.head()
+    """
+    
+    # Initialize an empty list to store the counts
+    intersection_counts = []
+
+    # Iterate over each building footprint and its corresponding HIZ geometry
+    for footprint_index, footprint in footprints_gdf.iterrows():
+        # Get the corresponding HIZ geometry for the current footprint
+        corresponding_hiz = hiz_gdf.loc[hiz_gdf.index == footprint_index, hiz_col].values[0]
+        
+        # Initialize the count of intersections for this footprint's HIZ zone
+        count = 0
+        
+        # Iterate over all other footprints and check for intersections with the current footprint's HIZ zone
+        for other_footprint_index, other_footprint in footprints_gdf.iterrows():
+            if footprint_index != other_footprint_index:
+                # Check if there's an intersection between the HIZ zone and the other footprint
+                if corresponding_hiz.intersects(other_footprint[footprint_col]):
+                    count += 1
+        
+        # Append the count and corresponding footprint index to the list
+        intersection_counts.append({'footprint_index': footprint_index, 'intersections': count})
+
+    # Convert the list of intersection counts to a DataFrame
+    counts_df = pd.DataFrame(intersection_counts)
+    
+    # Return the resulting DataFrame
+    return counts_df
+
+from shapely.geometry import MultiPoint
+
+def min_ssd(gdf, geom_col='geometry'):
+    """
+    Compute the minimum structure separation distance (SSD) between building footprints.
+    
+    Parameters:
+    ----------------
+    - gdf: GeoDataFrame containing building footprints.
+    - geom_col: The column name containing footprint geometries (default 'geometry').
+    
+    Returns:
+    ----------------
+    - GeoDataFrame with an additional 'min_ssd' column representing the minimum distance to the nearest footprint.
+    
+    Examples:
+    ----------------
+    gdf = min_ssd(gdf)
+    gdf.head()
+    """
+    
+    # Initialize an empty list to store the minimum SSD values
+    min_ssd_values = []
+
+    # Iterate over each building footprint
+    for index, structure in gdf.iterrows():
+        # Get the outer boundary of the current footprint (geometry)
+        current_boundary = structure[geom_col].boundary
+        
+        # Initialize a large minimum SSD value for comparison
+        min_distance = float('inf')
+        
+        # Compare the current building footprint with all other footprints
+        for other_index, other_structure in gdf.iterrows():
+            if index != other_index:  # Avoid comparing the footprint to itself
+                # Calculate the Euclidean distance between the current boundary and the other footprint's boundary
+                distance = current_boundary.distance(other_structure[geom_col])
+                
+                # If this distance is smaller than the current minimum, update the min_distance
+                if distance < min_distance:
+                    min_distance = distance
+        
+        # Append the computed minimum SSD value to the list
+        min_ssd_values.append(min_distance)
+    
+    # Add the 'min_ssd' column to the GeoDataFrame
+    gdf['min_ssd'] = min_ssd_values
+    
+    # Return the GeoDataFrame with the 'min_ssd' column
+    return gdf    
