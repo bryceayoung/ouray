@@ -34,7 +34,7 @@ def get_hiz(footprints, z1 = 2, z2 = 10, z3 = 30, z4 = 60):
     # Return enhanced GeoDataFrame
     return footprints
 
-def simple_hiz(footprints, id_column, buffer = 2, outer = 32):
+def simple_hiz(footprints, buffer = 2, outer = 32):
     '''
     Creates a simple ring buffer around building footprints for HIZ analysis.
 
@@ -64,7 +64,7 @@ def simple_hiz(footprints, id_column, buffer = 2, outer = 32):
     hiz = buffer_outer.difference(buffer_inner)
     
     # Create a new GeoDataFrame to hold the result
-    result_gdf = footprints[[id_column, 'geometry']].copy()
+    result_gdf = footprints[['geometry']].copy()
     
     # Assign the HIZ ring as the geometry
     result_gdf['geometry'] = hiz
