@@ -209,3 +209,66 @@ def min_ssd(gdf, geom_col='geometry'):
     
     # Return the GeoDataFrame with the 'min_ssd' column
     return gdf    
+
+from rasterio.mask import mask
+import numpy as np
+import rasterio as rio
+import geopandas as gpd
+
+def raster_stats(gdf, raster_paths, rnames, stats=['mean']):
+    """
+    Computes summary statistics for each raster within HIZ polygons.
+
+    Parameters:
+    - gdf: GeoDataFrame with HIZ polygons
+    - raster_paths: List of raster file paths
+    - rnames: List of correponding raster names for column titles (same order as paths)
+    - stats: List of stats to compute (options: 'mean', 'min', 'max', 'median', 'sum', 'std')
+
+    Returns:
+    - gdf with new columns for each stat per raster
+    """
+
+    # Define available stats
+    stat_funcs = {
+        'mean': np.nanmean,
+        'min': np.nanmin,
+        'max': np.nanmax,
+        'median': np.nanmedian,
+        'sum': np.nansum,
+        'std': np.nanstd
+    }
+
+    # Check for invalid stats
+    invalid_stats = [s for s in stats if s not in stat_funcs]
+    if invalid_stats:
+        raise ValueError(f"Invalid stats requested: {invalid_stats}")
+    
+    if len(raster_paths) != len(rnames):
+        raise ValueError("raster_paths and rnames must have the same length.")
+
+    # Loop through each raster
+    for raster_path, rname in zip(raster_paths, rnames):
+        with rio.open(raster_path) as src:
+            for idx, row in gdf.iterrows():
+                try:
+                    # Mask raster with polygon
+                    out_image, _ = mask(src, [row.geometry], crop=True, nodata=np.nan)
+
+                    # Flatten and remove NaNs
+                    data = out_image[0].flatten()
+                    data = data[~np.isnan(data)]  # Keep only valid values
+
+                    if len(data) > 0:  # Only compute if there's valid data
+                        for stat in stats:
+                            gdf.at[idx, f"{stat}_{rname}"] = stat_funcs[stat](data)
+                    else:
+                        for stat in stats:
+                            gdf.at[idx, f"{stat}_{rname}"] = np.nan
+
+                except Exception as e:
+                    print(f"Error processing {raster_path} for HIZ {row['footprint_index']}: {e}")
+                    for stat in stats:
+                        gdf.at[idx, f"{stat}_{rname}"] = np.nan  # Fill with NaN if error occurs
+
+    return gdf   
