@@ -267,7 +267,7 @@ def raster_stats(gdf, raster_paths, rnames, stats=['mean']):
                             gdf.at[idx, f"{stat}_{rname}"] = np.nan
 
                 except Exception as e:
-                    print(f"Error processing {raster_path} for HIZ {row['footprint_index']}: {e}")
+                    print(f"Error processing {raster_path} for HIZ {idx}: {e}")
                     for stat in stats:
                         gdf.at[idx, f"{stat}_{rname}"] = np.nan  # Fill with NaN if error occurs
 
