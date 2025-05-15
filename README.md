@@ -7,17 +7,19 @@
 In this repository, I develop workflows to predict and classify parcel-level wildfire risk to homes based on the attributes of structures and their defensible space. The analysis area is Ouray County, Colorado.
 
 ## Data
-There are four (4) primary data types used in this project: LiDAR, tax assessor data, and the SILVIS Global WUI raster.  
+There are four (4) primary data types used in this project: LiDAR, tax assessor data, building footprints, and the SILVIS Global WUI raster.  
 1. **LiDAR**  
 LAZ files were downloaded at the [Colorado Hazard Mapping website](https://coloradohazardmapping.com/lidarDownload "LiDAR Download"). These files were produced by Quantum Spatial in June of 2020 via Airborne Laser Scanning (ALS). The point density is great enough to create 1-meter rasters from the files. The rasters that I produced with them represent certain forest canopy metrics, which I will elaborate on later.  
 2. **Tax Assessor Data**  
 Property records were obtained my calling the Ouray County Tax Assessor office, who were kind enough to compile and send me CSV files of property tax assessments. This tabular data contains information about each property such as year built, roof material, siding material, outbuildings, and more information that influences the vulnerability of structures to wildfire.  
-3. **SILVIS Global WUI**  
+3. **Microsoft Building Footprints**  
+Microsoft Building Footprints for all counties in Colorado were retrieved from UC Boulder's [GeoLibrary](https://geo.colorado.edu/catalog?f%5Bdc_subject_sm%5D%5B%5D=Buildings "Download Building Footprints"). These data were used to create defensible space boundaries (function for that in `utils`), and compute the minimum structure separation distance (function for that in `utils`), and count the number of adjacent footprints intersecting the defensible space (function for that in `utils`).
+4. **SILVIS Global WUI**  
 The 2020 global WUI raster was obtained from [SILVIS Lab](https://zenodo.org/records/7941460 "Global Wildland Urban Interface"). It is a land class raster containing 8 different land classes which describe different types of WUI or non-WUI based on structure density, housing arrangement, and dominant surrounding vegetation. The resolution is 10m and the downloaded North America zip file contains 100km x 100km tiles.    
-4. **West Region Wildfire Council Rapid Wildfire Risk Assessment scores**  
-West Region Wildfire Council was kind enough to help with this project by providing me with risk assessment scores for the entire 6-county area that they cover in western Colorado, including Ouray County. These are tabular data containing the property identifier that can be spatially joined to county parcels. More information on the Rapid Wildfire Risk Assessment methodlogy can be obtained from [Meldrum et al. 2022](https://doi.org/10.3390/fire5010024 "Manuscript"). There are over 1,800 homes that have had risk assessments recorded in Ouray County. By training machine learning models to predict these risk scores, we can significantly increase the scale at which WRWC can assess risk. 
-5. **Other Data**  
-Microsoft Building Footprints for all counties in Colorado were retrieved from UC Boulder's [GeoLibrary](https://geo.colorado.edu/catalog?f%5Bdc_subject_sm%5D%5B%5D=Buildings "Download Building Footprints"). Individual parcel boundaries and Ouray County boundary were obtained online from the [Ouray County GIS Department](https://ouraycountyco.gov/146/GIS-Geographic-Information-Systems-IT "Download Ouray County GIS Data").
+5. **Rapid Wildfire Risk Assessment scores**  
+An entity in Ouray County was kind enough to help with this project by providing me with risk assessment scores for the entire 6-county area that they cover in western Colorado, including Ouray County. These are tabular data containing the property identifier that can be spatially joined to county parcels. More information on the Rapid Wildfire Risk Assessment methodlogy can be obtained from [Meldrum et al. 2022](https://doi.org/10.3390/fire5010024 "Manuscript"). There are over 1,800 homes that have had risk assessments recorded in Ouray County.
+6. **Other Data**  
+Individual parcel boundaries and Ouray County boundary were obtained online from the [Ouray County GIS Department](https://ouraycountyco.gov/146/GIS-Geographic-Information-Systems-IT "Download Ouray County GIS Data").
 
 ## Code in this Repo  
 - `r_workflows` primarily handles LAZ files and creating rasters from those files. I converted LAZ files to LAS files. I used the `lidR` package to explore the data and normalize the point clouds. In the `pixel_metrics.rmd` file, I turn the normalized LAS files into rasters that represent forest canopy metrics at 1-meter resolution. 
