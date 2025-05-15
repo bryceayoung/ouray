@@ -254,7 +254,7 @@ from rasterio.features import rasterize
 
 def rast_and_write(gdf, dst_path, profile, mask=None, **kwargs):
     '''
-    Function to rasterize a shapefile such as fire perimeters and write it to a tif file
+    Function to rasterize a shapefile or geopackage and write it to a tif file
 
     ------
     Parameters: 
@@ -282,11 +282,11 @@ def rast_and_write(gdf, dst_path, profile, mask=None, **kwargs):
     Example usage:
     raster, profile = read_raster('file/path/raster.tif', profile=True)
 
-    in_shapes = [perims1, perims2, perims3, perims4]
-    out_rasters = ['file/path/perims1_raster.tif', 'file/path/perims2_raster.tif', 'file/path/perims3_raster.tif', 'file/path/perims4_raster.tif']
+    in_shapes = [geom1, geom2, geom3, geom4]
+    out_rasters = ['file/path/geom1_raster.tif', 'file/path/geom2_raster.tif', 'file/path/geom3_raster.tif', 'file/path/geom4_raster.tif']
     
     for gdf, dst_path in zip(in_shapes, out_rasters):
-        rast_and_write(gdf, dst_path, profile=profile, mask=state_boundary_raster)
+        rast_and_write(gdf, dst_path, profile=profile, mask=boundary_raster)
 
     '''
     # Update the profile with any additional keyword arguments
@@ -308,3 +308,74 @@ def rast_and_write(gdf, dst_path, profile, mask=None, **kwargs):
     # Write the rasterized result to the output file
     with rio.open(dst_path, 'w', **profile) as dst:
         dst.write(rasterized, 1)
+
+import geopandas as gpd
+import rasterio as rio
+from rasterio.features import rasterize
+from rasterio.transform import from_origin
+import numpy as np
+
+def rasterize_gdf_to_file(
+    gdf,
+    out_path,
+    attribute=None,
+    resolution=10,
+    fill=0,
+    dtype='uint8'
+):
+    """
+    Rasterizes a GeoDataFrame and writes it to a raster file. Default creates binary raster (1 inside geom and 0 outside)
+
+    Parameters:
+    - gdf (GeoDataFrame): Input vector data.
+    - out_path (str): Path to save the rasterized GeoTIFF.
+    - attribute (str): Name of column to burn into raster. If None, burns 1.
+    - resolution (float): Pixel size (in units of CRS).
+    - fill (int/float): Value to assign to pixels with no geometry.
+    - dtype (str): Raster data type.
+    - crs (str): CRS to project raster into.
+    """
+
+    # Calculate bounds
+    minx, miny, maxx, maxy = gdf.total_bounds
+
+    # Calculate raster dimensions
+    width = int(np.ceil((maxx - minx) / resolution))
+    height = int(np.ceil((maxy - miny) / resolution))
+
+    # Define transform
+    transform = from_origin(minx, maxy, resolution, resolution)
+
+    # Prepare shapes for rasterize
+    if attribute:
+        shapes = ((geom, val) for geom, val in zip(gdf.geometry, gdf[attribute]))
+    else:
+        shapes = ((geom, 1) for geom in gdf.geometry)
+
+    # Rasterize
+    raster = rasterize(
+        shapes=shapes,
+        out_shape=(height, width),
+        transform=transform,
+        fill=fill,
+        dtype=dtype
+    )
+
+    # Build profile on-the-fly
+    profile = {
+        'driver': 'GTiff',
+        'height': height,
+        'width': width,
+        'count': 1,
+        'dtype': dtype,
+        'crs': crs,
+        'transform': transform,
+        'nodata': fill,
+        'compress': 'lzw'
+    }
+
+    # Save raster to file
+    with rio.open(out_path, 'w', **profile) as dst:
+        dst.write(raster, 1)
+
+    print(f"🔥 Raster written to: {out_path}")
